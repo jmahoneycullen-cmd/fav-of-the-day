@@ -45,11 +45,28 @@ function overLimit(req) {
   return n > DAILY_ADD_LIMIT;
 }
 // What the browser gets: never the owner hash, just whether it's yours.
+const MOVE_VOTES = 2; // this many matching tier votes moves a GIF
+// Where a GIF sits: the owner's pick, unless MOVE_VOTES+ people agree on another tier (most votes wins; ties stay put).
+function effectiveTier(g) {
+  const counts = tierCounts(g);
+  let best = null;
+  for (const t of TIERS) {
+    if (counts[t] < MOVE_VOTES) continue;
+    if (!best || counts[t] > counts[best] || (counts[t] === counts[best] && t === g.tier)) best = t;
+  }
+  return best || g.tier || null;
+}
+function tierCounts(g) {
+  const counts = Object.fromEntries(TIERS.map(t => [t, 0]));
+  for (const t of Object.values(g.tierVotes || {})) if (t in counts) counts[t]++;
+  return counts;
+}
 const publicGif = (g, req) => {
-  const { owner, votes = {}, ...rest } = g;
+  const { owner, votes = {}, tierVotes = {}, ...rest } = g;
   const me = ownerHash(req);
   const vals = Object.values(votes);
-  return { ...rest, mine: !!owner && owner === me,
+  return { ...rest, tier: effectiveTier(g), ownerTier: g.tier || null, tierCounts: tierCounts(g),
+    myTierVote: (me && tierVotes[me]) || null, mine: !!owner && owner === me,
     up: vals.filter(v => v === 1).length, down: vals.filter(v => v === -1).length, myVote: (me && votes[me]) || 0 };
 };
 
@@ -195,7 +212,7 @@ const server = http.createServer(async (req, res) => {
       if (existing) {
         if (existing.src !== src) {
           if (existing.src.startsWith('/uploads/')) fs.rm(path.join(UPLOAD_DIR, path.basename(existing.src)), () => {});
-          existing.votes = {}; // votes were for the old GIF
+          existing.votes = {}; existing.tierVotes = {}; // votes were for the old GIF
         }
         Object.assign(existing, { src, caption, by, tier: tier || existing.tier, addedAt: new Date().toISOString() });
         save(db);
@@ -223,14 +240,33 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { gif: publicGif(g, req) });
     }
 
+    // Vote on which tier a GIF belongs in (tier: null takes your vote back).
+    const tv = /^\/api\/gifs\/([\w-]+)\/tier-vote$/.exec(p);
+    if (tv && req.method === 'POST') {
+      const body = await readBody(req, 1024);
+      const tier = body.tier ? String(body.tier).toUpperCase() : null;
+      if (tier && !TIERS.includes(tier)) return send(res, 400, { error: 'Pick a tier from S to F.' });
+      const me = ownerHash(req);
+      if (!me) return send(res, 400, { error: 'Your browser blocked voting. Try allowing site data.' });
+      const db = load(); const g = db.gifs.find(x => x.id === tv[1]);
+      if (!g) return send(res, 404, { error: 'That GIF is gone.' });
+      if (g.owner === me) return send(res, 400, { error: "You can't vote on your own fav." });
+      g.tierVotes = g.tierVotes || {};
+      if (tier) g.tierVotes[me] = tier; else delete g.tierVotes[me];
+      save(db);
+      return send(res, 200, { gif: publicGif(g, req) });
+    }
+
     const m = /^\/api\/gifs\/([\w-]+)$/.exec(p);
+    // Admin override: put a GIF straight into a tier and clear its tier votes.
     if (m && req.method === 'PATCH') {
+      if (!isAdmin(req)) return send(res, 403, { error: 'Vote to move GIFs. Two matching votes moves it.' });
       const body = await readBody(req);
       const tier = String(body.tier || '').toUpperCase();
       if (!TIERS.includes(tier)) return send(res, 400, { error: 'Pick a tier from S to F.' });
       const db = load(); const g = db.gifs.find(x => x.id === m[1]);
       if (!g) return send(res, 404, { error: 'That GIF is gone.' });
-      g.tier = tier; save(db);
+      g.tier = tier; g.tierVotes = {}; save(db);
       return send(res, 200, { gif: publicGif(g, req) });
     }
     if (m && req.method === 'DELETE') {

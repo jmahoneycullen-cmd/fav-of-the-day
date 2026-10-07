@@ -108,6 +108,26 @@ input[type="text"], input[type="search"], input[type="url"], input[type="passwor
 .vote .n { font-weight: 800; font-variant-numeric: tabular-nums; min-width: 1ch; }
 .vote[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
 .vote:disabled { opacity: .6; }
+.fav, .card { cursor: pointer; }
+body.admin .fav, body.admin .card { cursor: grab; }
+.fav:focus-visible, .card:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+dialog#tierDialog { border: 1px solid var(--line); border-radius: 18px; padding: 0; background: var(--surface); color: var(--ink); width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; }
+dialog#tierDialog::backdrop { background: rgba(10, 8, 18, .6); }
+.td { position: relative; display: grid; }
+.td img { width: 100%; max-height: 300px; object-fit: contain; background: var(--bg); display: block; }
+.td-body { padding: 16px 18px 18px; display: grid; gap: 10px; }
+.td-body h3 { margin: 0; font: 400 1.2rem/1.1 var(--display); }
+.td-body .hint { margin: 0; }
+.td-close { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: 0; }
+.td-tiers { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.td-tiers button { padding: 8px 0 6px; display: grid; gap: 4px; justify-items: center; border: 3px solid transparent; color: var(--tier-ink); }
+.td-tiers button .t { font: 400 1.2rem/1 var(--display); }
+.td-tiers button .c { font-size: .72rem; font-weight: 800; font-variant-numeric: tabular-nums; background: rgba(255,255,255,.55); border-radius: 999px; padding: 0 6px; }
+.td-tiers button[aria-pressed="true"] { border-color: var(--ink); transform: translateY(-2px); box-shadow: 0 3px 0 var(--ink); }
+.td-tiers button.current { outline: 2px dashed var(--ink); outline-offset: 2px; }
+.td-tiers button:disabled { opacity: .55; cursor: default; }
+
 .fav .del { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: 0; opacity: 0; font-size: 14px; line-height: 1; }
 .fav:hover .del, .fav:focus-within .del { opacity: 1; }
 
@@ -175,7 +195,7 @@ button.link:hover { color: var(--ink); }
       <div class="fields">
         <div><label class="label" for="caption">Why this one?</label><input type="text" id="caption" maxlength="80" placeholder="Optional"></div>
         <div>
-          <div class="label">Rank it now? (optional, anyone can move it later)</div>
+          <div class="label">Starting tier (optional, others can vote to move it)</div>
           <div class="tierpick" id="tierpick"></div>
         </div>
         <button class="go" id="add" disabled>Submit my fav</button>
@@ -195,7 +215,7 @@ button.link:hover { color: var(--ink); }
   <section aria-labelledby="boardTitle" class="boardwrap">
     <div class="sechead">
       <h2 id="boardTitle">Tier list</h2>
-      <span class="count">Drag any fav onto a tier</span>
+      <span class="count" id="boardHint">Click someone's GIF to vote where it belongs. 2 matching votes moves it.</span>
     </div>
     <div class="board" id="board"></div>
   </section>
@@ -208,6 +228,20 @@ button.link:hover { color: var(--ink); }
     </form>
   </footer>
 </div>
+
+<dialog id="tierDialog" aria-labelledby="tdTitle">
+  <div class="td">
+    <button class="td-close" id="tdClose" aria-label="Close">✕</button>
+    <img id="tdImg" alt="">
+    <div class="td-body">
+      <h3 id="tdTitle"></h3>
+      <p class="hint" id="tdNow"></p>
+      <div class="label" id="tdAsk">Where should this go?</div>
+      <div class="td-tiers" id="tdTiers"></div>
+      <p class="hint" id="tdHint"></p>
+    </div>
+  </div>
+</dialog>
 
 <script>
 const TIERS = ['S', 'A', 'B', 'C', 'D', 'E', 'F'];
@@ -385,6 +419,7 @@ function renderFavs() {
     f.append(img, who);
     addDelete(f, g);
     draggable(f, g);
+    clickToVote(f, g);
     list.append(f);
   });
 }
@@ -416,6 +451,7 @@ function card(g) {
   if (label) { const cap = document.createElement('div'); cap.className = 'cap'; cap.textContent = label; c.append(cap); }
   addDelete(c, g);
   draggable(c, g);
+  clickToVote(c, g);
   return c;
 }
 // Thumbs up / down. Click your current vote again to take it back. No voting on your own fav.
@@ -455,7 +491,9 @@ function addDelete(el, g) {
   el.append(del);
 }
 // Anyone can drag any GIF onto a tier.
+// Dragging is an admin-only override; everyone else votes.
 function draggable(el, g) {
+  if (!state.admin) return;
   el.draggable = true;
   el.addEventListener('dragstart', e => { dragId = g.id; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
   el.addEventListener('dragend', () => { dragId = null; el.classList.remove('dragging'); });
@@ -463,19 +501,81 @@ function draggable(el, g) {
 async function move(id, tier) {
   const g = state.gifs.find(x => x.id === id);
   if (!g || g.tier === tier) return;
-  g.tier = tier; renderBoard(); renderFavs();
+  g.tier = tier; g.tierCounts = Object.fromEntries(TIERS.map(t => [t, 0])); g.myTierVote = null;
+  renderAll();
   try { await api('/api/gifs/' + id, { method: 'PATCH', body: JSON.stringify({ tier }) }); }
   catch (e) { say(e.message, true); refresh(); }
 }
 
 async function refresh() {
   if (dragId) return;
-  try { state.gifs = (await api('/api/gifs?day=' + state.day)).gifs; renderBoard(); renderFavs(); renderAsk(); }
+  try { state.gifs = (await api('/api/gifs?day=' + state.day)).gifs; renderAll(); renderAsk(); }
   catch (e) { say('Can’t reach the server. Is it running?', true); }
 }
+function renderAll() { renderBoard(); renderFavs(); renderTierDialog(); }
+
+// --- Tier voting: click a GIF, vote for the tier it belongs in ---
+const MOVE_VOTES = 2;
+let openId = null, lastMove = '';
+function clickToVote(el, g) {
+  el.tabIndex = 0;
+  el.setAttribute('aria-label', `${g.by || 'Someone'}'s fav. Open to vote on its tier`);
+  el.addEventListener('click', e => { if (!e.target.closest('button')) openTierDialog(g.id); });
+  el.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target === el) { e.preventDefault(); openTierDialog(g.id); } });
+}
+function openTierDialog(id) {
+  openId = id; lastMove = '';
+  renderTierDialog();
+  if (!$('tierDialog').open) $('tierDialog').showModal();
+}
+function renderTierDialog() {
+  if (!openId) return;
+  const g = state.gifs.find(x => x.id === openId);
+  if (!g) { if ($('tierDialog').open) $('tierDialog').close(); return; }
+  if ($('tdImg').getAttribute('src') !== g.src) $('tdImg').src = g.src;
+  $('tdImg').alt = g.caption || 'GIF';
+  $('tdTitle').textContent = g.mine ? 'Your fav' : `${g.by || 'Someone'}'s fav`;
+  const picked = g.ownerTier ? `${g.mine ? 'You' : g.by || 'They'} picked ${g.ownerTier}` : 'No starting tier picked';
+  $('tdNow').textContent = (g.tier ? `Sitting in ${g.tier} tier. ` : 'Not on the tier list yet. ') + picked + '.';
+  $('tdAsk').textContent = g.mine ? 'Votes so far' : 'Where should this go?';
+  const box = $('tdTiers'); box.innerHTML = '';
+  TIERS.forEach(t => {
+    const b = document.createElement('button'); b.type = 'button';
+    b.style.background = `var(--${t})`;
+    b.innerHTML = `<span class="t">${t}</span><span class="c">${g.tierCounts[t]}</span>`;
+    b.setAttribute('aria-label', `${t} tier, ${g.tierCounts[t]} ${g.tierCounts[t] === 1 ? 'vote' : 'votes'}`);
+    b.setAttribute('aria-pressed', g.myTierVote === t);
+    if (g.tier === t) b.classList.add('current');
+    if (g.mine) b.disabled = true;
+    b.onclick = () => tierVote(g, g.myTierVote === t ? null : t);
+    box.append(b);
+  });
+  $('tdHint').textContent = lastMove || (g.mine
+    ? "You can't vote on your own fav. When 2 people vote for the same tier, it moves there."
+    : g.myTierVote
+      ? `You voted ${g.myTierVote}. Click it again to take your vote back.`
+      : `When ${MOVE_VOTES} people vote for the same tier, it moves there.`);
+}
+async function tierVote(g, tier) {
+  const before = g.tier;
+  try {
+    Object.assign(g, (await api(`/api/gifs/${g.id}/tier-vote`, { method: 'POST', body: JSON.stringify({ tier }) })).gif);
+    lastMove = g.tier !== before ? `Enough votes! It moved to ${g.tier} tier.` : '';
+    renderBoard(); renderFavs(); renderTierDialog();
+  } catch (e) { $('tdHint').textContent = e.message; }
+}
+$('tdClose').onclick = () => $('tierDialog').close();
+$('tierDialog').addEventListener('click', e => { if (e.target === $('tierDialog')) $('tierDialog').close(); });
+$('tierDialog').addEventListener('close', () => { openId = null; });
 
 // --- Admin (you): unlocks deleting anyone's GIF ---
-function renderAdmin() { $('adminBtn').textContent = state.admin ? 'Admin: on (log out)' : 'Admin'; }
+function renderAdmin() {
+  $('adminBtn').textContent = state.admin ? 'Admin: on (log out)' : 'Admin';
+  document.body.classList.toggle('admin', state.admin);
+  $('boardHint').textContent = state.admin
+    ? 'Admin: drag any GIF to put it straight into a tier (clears its votes).'
+    : `Click someone's GIF to vote where it belongs. ${MOVE_VOTES} matching votes moves it.`;
+}
 $('adminBtn').onclick = () => {
   if (state.admin) { adminCode = ''; store('admin', null); state.admin = false; renderAdmin(); renderBoard(); renderFavs(); return; }
   $('adminForm').hidden = !$('adminForm').hidden; if (!$('adminForm').hidden) $('adminCode').focus();
