@@ -80,6 +80,32 @@ input[type="text"], input[type="search"], input[type="url"], input[type="passwor
 .card:hover .del, .card:focus-within .del { opacity: 1; }
 .card.dragging { opacity: .4; }
 
+.upload > div > h2 + .hint { margin-top: 6px; }
+.namefield { max-width: 360px; }
+.namefield .label { display: block; }
+.upload label.label { display: block; }
+.mine-note { color: var(--C); font-weight: 600; }
+
+.sechead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.sechead h2 { font: 400 1.5rem/1 var(--display); margin: 0; }
+.count { color: var(--muted); font-size: .9rem; }
+.boardwrap { display: grid; }
+.favlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+.favlist .none { grid-column: 1 / -1; border: 2px dashed var(--line); border-radius: 14px; padding: 28px 16px; text-align: center; color: var(--muted); margin: 0; }
+.fav { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; cursor: grab; display: grid; grid-template-rows: auto 1fr; }
+.fav.is-mine { border-color: var(--accent); }
+.fav.dragging { opacity: .4; }
+.fav img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: var(--bg); pointer-events: none; }
+.fav .who { padding: 10px 12px 12px; display: grid; gap: 2px; min-width: 0; }
+.fav .name { font-weight: 800; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fav .name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fav .why { color: var(--muted); font-size: .88rem; overflow-wrap: anywhere; }
+.fav .when { color: var(--muted); font-size: .75rem; }
+.badge { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; font: 400 .85rem/1 var(--display); color: var(--tier-ink); }
+.you { flex: none; font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.fav .del { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: 0; opacity: 0; font-size: 14px; line-height: 1; }
+.fav:hover .del, .fav:focus-within .del { opacity: 1; }
+
 footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: flex-end; }
 footer form { display: flex; gap: 6px; }
 footer input { width: 200px; }
@@ -101,7 +127,7 @@ button.link:hover { color: var(--ink); }
   <header>
     <div>
       <h1>Fav of the <span>Day</span></h1>
-      <p class="tagline">Drop in today's best GIF and rank it. Drag GIFs between tiers to argue about it.</p>
+      <p class="tagline">Everyone picks one GIF a day. Then drag them onto the tier list and argue about it.</p>
     </div>
     <nav class="daynav" aria-label="Pick a day">
       <button id="prev" aria-label="Previous day">‹</button>
@@ -110,8 +136,16 @@ button.link:hover { color: var(--ink); }
     </nav>
   </header>
 
-  <section class="upload" aria-labelledby="uploadTitle">
-    <h2 id="uploadTitle">Upload your GIF</h2>
+  <section class="upload" id="ask" aria-labelledby="uploadTitle">
+    <div>
+      <h2 id="uploadTitle">What's your fav GIF of the day?</h2>
+      <p class="hint" id="askHint">One pick per person, every day.</p>
+    </div>
+    <div class="namefield">
+      <label class="label" for="by">Your name</label>
+      <input type="text" id="by" maxlength="30" placeholder="So everyone knows it's yours" autocomplete="nickname">
+    </div>
+    <div class="label">Your GIF</div>
     <div class="tabs" role="tablist">
       <button role="tab" id="tab-search" data-pane="search" aria-selected="false" hidden>Search Giphy</button>
       <button role="tab" id="tab-link" data-pane="link" aria-selected="true">Paste a Giphy link</button>
@@ -134,21 +168,32 @@ button.link:hover { color: var(--ink); }
     <div class="compose">
       <div class="preview" id="preview">Your GIF shows up here</div>
       <div class="fields">
-        <div class="row2">
-          <div><div class="label">Caption</div><input type="text" id="caption" maxlength="80" placeholder="Optional"></div>
-          <div><div class="label">Your name</div><input type="text" id="by" maxlength="30" placeholder="Optional"></div>
-        </div>
+        <div><label class="label" for="caption">Why this one?</label><input type="text" id="caption" maxlength="80" placeholder="Optional"></div>
         <div>
-          <div class="label">Which tier?</div>
+          <div class="label">Rank it now? (optional, anyone can move it later)</div>
           <div class="tierpick" id="tierpick"></div>
         </div>
-        <button class="go" id="add" disabled>Add to the board</button>
+        <button class="go" id="add" disabled>Submit my fav</button>
         <p class="msg" id="msg" role="status"></p>
       </div>
     </div>
   </section>
 
-  <section class="board" id="board" aria-label="Tier list"></section>
+  <section class="favs" aria-labelledby="favsTitle">
+    <div class="sechead">
+      <h2 id="favsTitle">Today's favs</h2>
+      <span class="count" id="favCount"></span>
+    </div>
+    <div class="favlist" id="favlist"></div>
+  </section>
+
+  <section aria-labelledby="boardTitle" class="boardwrap">
+    <div class="sechead">
+      <h2 id="boardTitle">Tier list</h2>
+      <span class="count">Drag any fav onto a tier</span>
+    </div>
+    <div class="board" id="board"></div>
+  </section>
 
   <footer>
     <button class="link" id="adminBtn">Admin</button>
@@ -190,7 +235,8 @@ function renderDay() {
   $('dayLabel').textContent = state.day === t ? 'Today'
     : new Date(state.day + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
   $('next').disabled = state.day >= t;
-  $('add').textContent = state.day === t ? 'Add to the board' : 'Add to this day';
+  $('ask').hidden = state.day !== t; // favs can only be picked for today
+  $('favsTitle').textContent = state.day === t ? "Today's favs" : `Favs from ${$('dayLabel').textContent}`;
 }
 $('prev').onclick = () => { state.day = shiftDay(state.day, -1); renderDay(); refresh(); };
 $('next').onclick = () => { state.day = shiftDay(state.day, 1); renderDay(); refresh(); };
@@ -211,7 +257,14 @@ function setPick(pick) {
   else $('preview').textContent = 'Your GIF shows up here';
   updateAdd();
 }
-function updateAdd() { $('add').disabled = !(state.pick && state.tier); }
+function updateAdd() { $('add').disabled = !(state.pick && $('by').value.trim()); }
+function myFav() { return state.gifs.find(g => g.mine); }
+function renderAsk() {
+  const mine = myFav();
+  $('askHint').textContent = mine ? "You've picked yours today. Pick again to swap it." : 'One pick per person, every day.';
+  $('askHint').className = 'hint' + (mine ? ' mine-note' : '');
+  $('add').textContent = mine ? 'Swap my fav' : 'Submit my fav';
+}
 
 $('link').addEventListener('input', () => {
   const v = $('link').value.trim();
@@ -274,28 +327,62 @@ TIERS.forEach(t => {
   b.textContent = t; b.style.background = `var(--${t})`; b.setAttribute('aria-pressed', 'false');
   b.setAttribute('aria-label', t + ' tier');
   b.onclick = () => {
-    state.tier = t; store('lastTier', t);
-    $('tierpick').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
-    updateAdd();
+    state.tier = state.tier === t ? null : t; // click again to unpick
+    $('tierpick').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b && !!state.tier));
   };
   $('tierpick').append(b);
 });
 
 $('by').value = store('name') || '';
+$('by').addEventListener('input', updateAdd);
 $('by').addEventListener('change', () => store('name', $('by').value.trim()));
 
 $('add').onclick = async () => {
-  $('add').disabled = true; say('Adding…');
+  if (!$('by').value.trim()) { $('by').focus(); return say('Add your name first.', true); }
+  $('add').disabled = true; say('Submitting…');
   try {
     const body = { tier: state.tier, day: state.day, caption: $('caption').value.trim(), by: $('by').value.trim() };
     if (state.pick.dataUrl) body.dataUrl = state.pick.dataUrl; else body.url = state.pick.url;
-    await api('/api/gifs', { method: 'POST', body: JSON.stringify(body) });
-    say(`Added to ${state.tier} tier.`);
+    const r = await api('/api/gifs', { method: 'POST', body: JSON.stringify(body) });
+    store('name', body.by);
+    say(r.replaced ? 'Swapped! Your new fav is up.' : "Nice pick! You're on today's list.");
     setPick(null); $('link').value = ''; $('caption').value = ''; $('file').value = '';
-    $('results').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', 'false'));
-    refresh();
+    state.tier = null;
+    document.querySelectorAll('#results button, #tierpick button').forEach(x => x.setAttribute('aria-pressed', 'false'));
+    await refresh();
+    $('favsTitle').scrollIntoView({ behavior: 'smooth', block: 'start' });
   } catch (e) { say(e.message, true); updateAdd(); }
 };
+
+// --- Today's favs list ---
+function renderFavs() {
+  const list = $('favlist'); list.innerHTML = '';
+  // Newest first, but your own pick always leads.
+  const favs = [...state.gifs].sort((a, b) => (b.mine - a.mine) || b.addedAt.localeCompare(a.addedAt));
+  $('favCount').textContent = favs.length ? `${favs.length} ${favs.length === 1 ? 'person has' : 'people have'} picked` : '';
+  if (!favs.length) {
+    list.innerHTML = `<p class="none">${state.day === todayStr() ? 'Nobody has picked yet today. Be the first!' : 'Nobody picked a fav this day.'}</p>`;
+    return;
+  }
+  favs.forEach(g => {
+    const f = document.createElement('figure'); f.className = 'fav' + (g.mine ? ' is-mine' : ''); f.style.margin = 0;
+    const img = new Image(); img.src = g.src; img.alt = g.caption || `${g.by || 'Someone'}'s fav GIF`; img.loading = 'lazy';
+    const who = document.createElement('figcaption'); who.className = 'who';
+    const name = document.createElement('div'); name.className = 'name';
+    if (g.tier) { const b = document.createElement('span'); b.className = 'badge'; b.textContent = g.tier; b.style.background = `var(--${g.tier})`; b.title = g.tier + ' tier'; name.append(b); }
+    const n = document.createElement('span'); n.textContent = g.by || 'Someone'; name.append(n);
+    if (g.mine) { const y = document.createElement('span'); y.className = 'you'; y.textContent = 'You'; name.append(y); }
+    who.append(name);
+    if (g.caption) { const w = document.createElement('div'); w.className = 'why'; w.textContent = g.caption; who.append(w); }
+    const when = document.createElement('div'); when.className = 'when';
+    when.textContent = new Date(g.addedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    who.append(when);
+    f.append(img, who);
+    addDelete(f, g);
+    draggable(f, g);
+    list.append(f);
+  });
+}
 
 // --- Board ---
 let dragId = null;
@@ -322,36 +409,45 @@ function card(g) {
   const img = new Image(); img.src = g.src; img.alt = g.caption || 'GIF'; img.loading = 'lazy';
   c.append(img);
   if (label) { const cap = document.createElement('div'); cap.className = 'cap'; cap.textContent = label; c.append(cap); }
-  if (!(g.mine || state.admin)) return c;
+  addDelete(c, g);
+  draggable(c, g);
+  return c;
+}
+// Only the person who picked it (or admin) gets a remove button.
+function addDelete(el, g) {
+  if (!(g.mine || state.admin)) return;
   const del = document.createElement('button'); del.className = 'del'; del.textContent = '✕'; del.setAttribute('aria-label', 'Remove GIF');
   del.onclick = async () => {
     if (del.dataset.armed) { await api('/api/gifs/' + g.id, { method: 'DELETE' }).catch(e => say(e.message, true)); refresh(); }
     else { del.dataset.armed = 1; del.textContent = 'Sure?'; del.style.width = 'auto'; del.style.padding = '0 8px'; del.style.borderRadius = '13px';
       setTimeout(() => { delete del.dataset.armed; del.textContent = '✕'; del.removeAttribute('style'); }, 3000); }
   };
-  c.append(del);
-  c.addEventListener('dragstart', e => { dragId = g.id; c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
-  c.addEventListener('dragend', () => { dragId = null; c.classList.remove('dragging'); });
-  return c;
+  el.append(del);
+}
+// Anyone can drag any GIF onto a tier.
+function draggable(el, g) {
+  el.draggable = true;
+  el.addEventListener('dragstart', e => { dragId = g.id; el.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+  el.addEventListener('dragend', () => { dragId = null; el.classList.remove('dragging'); });
 }
 async function move(id, tier) {
   const g = state.gifs.find(x => x.id === id);
   if (!g || g.tier === tier) return;
-  g.tier = tier; renderBoard();
+  g.tier = tier; renderBoard(); renderFavs();
   try { await api('/api/gifs/' + id, { method: 'PATCH', body: JSON.stringify({ tier }) }); }
   catch (e) { say(e.message, true); refresh(); }
 }
 
 async function refresh() {
   if (dragId) return;
-  try { state.gifs = (await api('/api/gifs?day=' + state.day)).gifs; renderBoard(); }
+  try { state.gifs = (await api('/api/gifs?day=' + state.day)).gifs; renderBoard(); renderFavs(); renderAsk(); }
   catch (e) { say('Can’t reach the server. Is it running?', true); }
 }
 
 // --- Admin (you): unlocks deleting anyone's GIF ---
 function renderAdmin() { $('adminBtn').textContent = state.admin ? 'Admin: on (log out)' : 'Admin'; }
 $('adminBtn').onclick = () => {
-  if (state.admin) { adminCode = ''; store('admin', null); state.admin = false; renderAdmin(); renderBoard(); return; }
+  if (state.admin) { adminCode = ''; store('admin', null); state.admin = false; renderAdmin(); renderBoard(); renderFavs(); return; }
   $('adminForm').hidden = !$('adminForm').hidden; if (!$('adminForm').hidden) $('adminCode').focus();
 };
 $('adminForm').addEventListener('submit', async e => {
@@ -359,7 +455,7 @@ $('adminForm').addEventListener('submit', async e => {
   adminCode = $('adminCode').value;
   try { await api('/api/admin'); state.admin = true; store('admin', adminCode); $('adminForm').hidden = true; $('adminCode').value = ''; say('Admin mode on. You can remove any GIF.'); }
   catch { adminCode = ''; say('Wrong passcode.', true); }
-  renderAdmin(); renderBoard();
+  renderAdmin(); renderBoard(); renderFavs();
 });
 
 // --- Boot ---

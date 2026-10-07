@@ -160,9 +160,14 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && p === '/api/gifs') {
       const body = await readBody(req);
-      const tier = String(body.tier || '').toUpperCase();
-      if (!TIERS.includes(tier)) return send(res, 400, { error: 'Pick a tier from S to F.' });
+      const tier = body.tier ? String(body.tier).toUpperCase() : null;
+      if (tier && !TIERS.includes(tier)) return send(res, 400, { error: 'Pick a tier from S to F.' });
       if (!/^\d{4}-\d{2}-\d{2}$/.test(body.day || '')) return send(res, 400, { error: 'Missing day.' });
+      // Favs are for today only (±1 day so every time zone works).
+      if (Math.abs(Date.parse(body.day) - Date.parse(new Date().toISOString().slice(0, 10))) > 864e5)
+        return send(res, 400, { error: 'You can only pick a fav for today.' });
+      const by = String(body.by || '').trim().slice(0, 30);
+      if (!by) return send(res, 400, { error: 'Add your name first.' });
       if (!isAdmin(req) && overLimit(req)) return send(res, 429, { error: "That's " + DAILY_ADD_LIMIT + " GIFs today. Come back tomorrow!" });
 
       let src;
@@ -179,15 +184,20 @@ const server = http.createServer(async (req, res) => {
         if (!src) return send(res, 400, { error: "That doesn't look like a Giphy link. Try the link from Giphy's Share button." });
       }
 
-      const gif = {
-        id: crypto.randomUUID(),
-        src, tier, day: body.day,
-        caption: String(body.caption || '').slice(0, 80),
-        by: String(body.by || '').slice(0, 30),
-        addedAt: new Date().toISOString(),
-        owner: ownerHash(req),
-      };
-      const db = load(); db.gifs.push(gif); save(db);
+      const owner = ownerHash(req);
+      const caption = String(body.caption || '').slice(0, 80);
+      const db = load();
+      // One fav per person per day: picking again swaps your earlier one.
+      const existing = owner && db.gifs.find(g => g.owner === owner && g.day === body.day);
+      if (existing) {
+        if (existing.src !== src && existing.src.startsWith('/uploads/'))
+          fs.rm(path.join(UPLOAD_DIR, path.basename(existing.src)), () => {});
+        Object.assign(existing, { src, caption, by, tier: tier || existing.tier, addedAt: new Date().toISOString() });
+        save(db);
+        return send(res, 200, { gif: publicGif(existing, req), replaced: true });
+      }
+      const gif = { id: crypto.randomUUID(), src, tier, day: body.day, caption, by, addedAt: new Date().toISOString(), owner };
+      db.gifs.push(gif); save(db);
       return send(res, 201, { gif: publicGif(gif, req) });
     }
 
