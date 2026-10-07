@@ -1,0 +1,13 @@
+{
+  "name": "fav-of-the-day",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Upload today's favourite GIF and rank it S to F.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

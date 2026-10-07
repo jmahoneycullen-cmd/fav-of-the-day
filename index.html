@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fav of the Day</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400;600;800&display=swap">
+<style>
+/* Layout: upload panel on top, classic S–F tier rows below; GIFs drag between rows. */
+:root {
+  --bg: #f5f3fa; --surface: #ffffff; --ink: #1d1a29; --muted: #6c6782; --line: #e2def0; --accent: #7b3fe4;
+  --S: #ff5a5f; --A: #ff9a3c; --B: #ffd23f; --C: #8fd14f; --D: #3fb8f0; --E: #9a7bff; --F: #b9b4c7;
+  --tier-ink: #1d1a29;
+  --display: "Bungee", "Impact", system-ui, sans-serif;
+  --body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #14121b; --surface: #1e1b29; --ink: #f1eefa; --muted: #a39dba; --line: #322d44; --accent: #a77bff; --F: #8b86a0; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 16px/1.5 var(--body); }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 32px 16px 64px; display: grid; gap: 28px; }
+
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; }
+h1 { font: 400 clamp(2.4rem, 7vw, 4.2rem)/0.95 var(--display); margin: 0; letter-spacing: -0.01em; }
+h1 span { color: var(--accent); }
+.tagline { margin: 8px 0 0; color: var(--muted); }
+.daynav { display: flex; align-items: center; gap: 8px; }
+.daynav button { width: 40px; height: 40px; }
+.daynav strong { min-width: 9.5em; text-align: center; font-weight: 800; }
+
+button { font: inherit; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px; padding: 8px 14px; }
+button:hover { border-color: var(--accent); }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+
+.upload { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px; display: grid; gap: 16px; }
+.upload h2 { font: 400 1.5rem/1 var(--display); margin: 0; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabs button[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.pane { display: grid; gap: 10px; }
+input[type="text"], input[type="search"], input[type="url"], input[type="password"] {
+  font: inherit; width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+}
+.hint { color: var(--muted); font-size: .9rem; margin: 0; }
+.results { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; max-height: 320px; overflow-y: auto; }
+.results button { padding: 0; border-radius: 8px; overflow: hidden; height: 100px; border-width: 2px; }
+.results button[aria-pressed="true"] { border-color: var(--accent); }
+.results img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.drop { border: 2px dashed var(--line); border-radius: 14px; padding: 28px 16px; text-align: center; color: var(--muted); cursor: pointer; }
+.drop.over { border-color: var(--accent); color: var(--ink); }
+
+.compose { display: grid; grid-template-columns: 180px 1fr; gap: 16px; align-items: start; }
+.preview { width: 180px; max-width: 100%; aspect-ratio: 1; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); display: grid; place-items: center; overflow: hidden; color: var(--muted); font-size: .85rem; text-align: center; padding: 8px; }
+.preview img { width: 100%; height: 100%; object-fit: contain; }
+.fields { display: grid; gap: 12px; min-width: 0; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.label { font-size: .75rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.tierpick { display: flex; flex-wrap: wrap; gap: 6px; }
+.tierpick button { width: 46px; height: 46px; padding: 0; font: 400 1.2rem/1 var(--display); color: var(--tier-ink); border: 3px solid transparent; }
+.tierpick button[aria-pressed="true"] { border-color: var(--ink); transform: translateY(-2px); box-shadow: 0 4px 0 var(--ink); }
+.go { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 800; padding: 12px 20px; justify-self: start; }
+.msg { min-height: 1.5em; margin: 0; font-weight: 600; }
+.msg.err { color: var(--S); }
+
+.board { display: grid; gap: 6px; }
+.tier { display: grid; grid-template-columns: 84px 1fr; min-height: 110px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.tier.over { outline: 3px solid var(--accent); outline-offset: -3px; }
+.tier .letter { display: grid; place-items: center; font: 400 2.4rem/1 var(--display); color: var(--tier-ink); }
+.tier .slots { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px; align-content: flex-start; min-width: 0; }
+.tier .empty { color: var(--muted); font-size: .85rem; align-self: center; padding-left: 6px; }
+.card { position: relative; width: 140px; height: 94px; border-radius: 8px; overflow: hidden; background: var(--bg); cursor: grab; }
+.card img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.card .cap { position: absolute; inset: auto 0 0 0; padding: 14px 6px 4px; font-size: .72rem; font-weight: 600; color: #fff; background: linear-gradient(transparent, rgba(0,0,0,.75)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .del { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: 0; opacity: 0; font-size: 14px; line-height: 1; }
+.card:hover .del, .card:focus-within .del { opacity: 1; }
+.card.dragging { opacity: .4; }
+
+footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; justify-content: flex-end; }
+footer form { display: flex; gap: 6px; }
+footer input { width: 200px; }
+button.link { border: 0; background: none; color: var(--muted); padding: 4px; font-size: .85rem; }
+button.link:hover { color: var(--ink); }
+
+@media (max-width: 600px) {
+  .compose { grid-template-columns: 1fr; }
+  .row2 { grid-template-columns: 1fr; }
+  .tier { grid-template-columns: 56px 1fr; }
+  .tier .letter { font-size: 1.8rem; }
+  .card { width: 110px; height: 76px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Fav of the <span>Day</span></h1>
+      <p class="tagline">Drop in today's best GIF and rank it. Drag GIFs between tiers to argue about it.</p>
+    </div>
+    <nav class="daynav" aria-label="Pick a day">
+      <button id="prev" aria-label="Previous day">‹</button>
+      <strong id="dayLabel">Today</strong>
+      <button id="next" aria-label="Next day">›</button>
+    </nav>
+  </header>
+
+  <section class="upload" aria-labelledby="uploadTitle">
+    <h2 id="uploadTitle">Upload your GIF</h2>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-search" data-pane="search" aria-selected="false" hidden>Search Giphy</button>
+      <button role="tab" id="tab-link" data-pane="link" aria-selected="true">Paste a Giphy link</button>
+      <button role="tab" id="tab-file" data-pane="file" aria-selected="false">From my computer</button>
+    </div>
+
+    <div class="pane" id="pane-search" hidden>
+      <input type="search" id="q" placeholder="Search Giphy, e.g. happy friday" autocomplete="off">
+      <div class="results" id="results"></div>
+    </div>
+    <div class="pane" id="pane-link">
+      <input type="url" id="link" placeholder="https://giphy.com/gifs/..." autocomplete="off">
+      <p class="hint">On Giphy, hit Share → Copy link and paste it here. Media links (media.giphy.com/…) work too.</p>
+    </div>
+    <div class="pane" id="pane-file" hidden>
+      <label class="drop" id="drop" for="file">Drop a GIF here or click to choose one (up to 5 MB)</label>
+      <input type="file" id="file" accept="image/gif,image/png,image/jpeg,image/webp" hidden>
+    </div>
+
+    <div class="compose">
+      <div class="preview" id="preview">Your GIF shows up here</div>
+      <div class="fields">
+        <div class="row2">
+          <div><div class="label">Caption</div><input type="text" id="caption" maxlength="80" placeholder="Optional"></div>
+          <div><div class="label">Your name</div><input type="text" id="by" maxlength="30" placeholder="Optional"></div>
+        </div>
+        <div>
+          <div class="label">Which tier?</div>
+          <div class="tierpick" id="tierpick"></div>
+        </div>
+        <button class="go" id="add" disabled>Add to the board</button>
+        <p class="msg" id="msg" role="status"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="board" id="board" aria-label="Tier list"></section>
+
+  <footer>
+    <button class="link" id="adminBtn">Admin</button>
+    <form id="adminForm" hidden>
+      <input type="password" id="adminCode" placeholder="Admin passcode" autocomplete="current-password">
+      <button type="submit">Unlock</button>
+    </form>
+  </footer>
+</div>
+
+<script>
+const TIERS = ['S', 'A', 'B', 'C', 'D', 'E', 'F'];
+const $ = id => document.getElementById(id);
+const state = { day: todayStr(), pick: null, tier: null, gifs: [], admin: false };
+
+function todayStr(d = new Date()) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function shiftDay(str, n) { const d = new Date(str + 'T12:00:00'); d.setDate(d.getDate() + n); return todayStr(d); }
+function store(k, v) { try { v === undefined ? (v = localStorage.getItem(k)) : v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} return v; }
+
+// A random token for this browser proves which GIFs are yours (no accounts needed).
+const ownerToken = store('owner') || store('owner', crypto.randomUUID());
+let adminCode = store('admin') || '';
+async function api(path, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', 'X-Owner': ownerToken };
+  if (adminCode) headers['X-Admin'] = adminCode;
+  const r = await fetch(path, { ...opts, headers });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'Something went wrong.');
+  return j;
+}
+
+function say(text, err = false) { $('msg').textContent = text; $('msg').className = 'msg' + (err ? ' err' : ''); }
+
+// --- Day navigation ---
+function renderDay() {
+  const t = todayStr();
+  $('dayLabel').textContent = state.day === t ? 'Today'
+    : new Date(state.day + 'T12:00:00').toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  $('next').disabled = state.day >= t;
+  $('add').textContent = state.day === t ? 'Add to the board' : 'Add to this day';
+}
+$('prev').onclick = () => { state.day = shiftDay(state.day, -1); renderDay(); refresh(); };
+$('next').onclick = () => { state.day = shiftDay(state.day, 1); renderDay(); refresh(); };
+
+// --- Tabs ---
+document.querySelectorAll('[role="tab"]').forEach(tab => tab.onclick = () => {
+  document.querySelectorAll('[role="tab"]').forEach(t => {
+    const on = t === tab; t.setAttribute('aria-selected', on); $('pane-' + t.dataset.pane).hidden = !on;
+  });
+  if (tab.dataset.pane === 'search' && !$('results').children.length) search('');
+});
+
+// --- Picking a GIF ---
+function setPick(pick) {
+  state.pick = pick;
+  $('preview').innerHTML = '';
+  if (pick) { const img = new Image(); img.src = pick.preview; img.alt = 'Selected GIF'; $('preview').append(img); }
+  else $('preview').textContent = 'Your GIF shows up here';
+  updateAdd();
+}
+function updateAdd() { $('add').disabled = !(state.pick && state.tier); }
+
+$('link').addEventListener('input', () => {
+  const v = $('link').value.trim();
+  if (!v) return setPick(null);
+  const direct = giphyMedia(v);
+  setPick({ url: v, preview: direct || v });
+});
+// Client-side guess so the preview shows instantly; the server does the real resolving.
+function giphyMedia(v) {
+  try {
+    const u = new URL(v);
+    if (!u.hostname.endsWith('giphy.com')) return null;
+    const parts = u.pathname.split('/').filter(Boolean);
+    const mi = parts.indexOf('media');
+    let id = mi >= 0 ? (parts[mi + 1]?.startsWith('v1.') ? parts[mi + 2] : parts[mi + 1]) : parts.at(-1)?.split('-').pop();
+    return id ? `https://media.giphy.com/media/${id}/giphy.gif` : null;
+  } catch { return null; }
+}
+
+let searchTimer, searchSeq = 0;
+$('q').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(() => search($('q').value.trim()), 350); });
+async function search(q) {
+  const seq = ++searchSeq;
+  try {
+    const { results } = await api('/api/search?q=' + encodeURIComponent(q));
+    if (seq !== searchSeq) return;
+    $('results').innerHTML = '';
+    results.forEach(g => {
+      const b = document.createElement('button');
+      b.setAttribute('aria-pressed', 'false'); b.title = g.title;
+      const img = new Image(); img.src = g.preview; img.alt = g.title; img.loading = 'lazy';
+      b.append(img);
+      b.onclick = () => {
+        $('results').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+        setPick({ url: g.url, preview: g.url });
+        if (!$('caption').value) $('caption').value = g.title.replace(/ GIF.*$/i, '').slice(0, 80);
+      };
+      $('results').append(b);
+    });
+    if (!results.length) $('results').innerHTML = '<p class="hint">No GIFs for that one. Try another word.</p>';
+  } catch (e) { say(e.message, true); }
+}
+
+function readFile(file) {
+  if (!file) return;
+  if (file.size > 5 * 1024 * 1024) return say('That file is over 5 MB.', true);
+  const fr = new FileReader();
+  fr.onload = () => { setPick({ dataUrl: fr.result, preview: fr.result }); say(''); };
+  fr.readAsDataURL(file);
+}
+$('file').onchange = () => readFile($('file').files[0]);
+const drop = $('drop');
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); readFile(e.dataTransfer.files[0]); });
+
+// --- Tier picker ---
+TIERS.forEach(t => {
+  const b = document.createElement('button');
+  b.textContent = t; b.style.background = `var(--${t})`; b.setAttribute('aria-pressed', 'false');
+  b.setAttribute('aria-label', t + ' tier');
+  b.onclick = () => {
+    state.tier = t; store('lastTier', t);
+    $('tierpick').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    updateAdd();
+  };
+  $('tierpick').append(b);
+});
+
+$('by').value = store('name') || '';
+$('by').addEventListener('change', () => store('name', $('by').value.trim()));
+
+$('add').onclick = async () => {
+  $('add').disabled = true; say('Adding…');
+  try {
+    const body = { tier: state.tier, day: state.day, caption: $('caption').value.trim(), by: $('by').value.trim() };
+    if (state.pick.dataUrl) body.dataUrl = state.pick.dataUrl; else body.url = state.pick.url;
+    await api('/api/gifs', { method: 'POST', body: JSON.stringify(body) });
+    say(`Added to ${state.tier} tier.`);
+    setPick(null); $('link').value = ''; $('caption').value = ''; $('file').value = '';
+    $('results').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', 'false'));
+    refresh();
+  } catch (e) { say(e.message, true); updateAdd(); }
+};
+
+// --- Board ---
+let dragId = null;
+function renderBoard() {
+  const board = $('board'); board.innerHTML = '';
+  TIERS.forEach(t => {
+    const row = document.createElement('div'); row.className = 'tier'; row.dataset.tier = t;
+    const letter = document.createElement('div'); letter.className = 'letter'; letter.textContent = t; letter.style.background = `var(--${t})`;
+    const slots = document.createElement('div'); slots.className = 'slots';
+    const gifs = state.gifs.filter(g => g.tier === t);
+    if (!gifs.length) slots.innerHTML = '<span class="empty">Nothing here yet</span>';
+    gifs.forEach(g => slots.append(card(g)));
+    row.append(letter, slots);
+    row.addEventListener('dragover', e => { if (dragId) { e.preventDefault(); row.classList.add('over'); } });
+    row.addEventListener('dragleave', () => row.classList.remove('over'));
+    row.addEventListener('drop', e => { e.preventDefault(); row.classList.remove('over'); if (dragId) move(dragId, t); });
+    board.append(row);
+  });
+}
+function card(g) {
+  const c = document.createElement('div'); c.className = 'card'; c.draggable = true;
+  const label = [g.caption, g.by && `by ${g.by}`].filter(Boolean).join(' · ');
+  c.title = label || 'GIF';
+  const img = new Image(); img.src = g.src; img.alt = g.caption || 'GIF'; img.loading = 'lazy';
+  c.append(img);
+  if (label) { const cap = document.createElement('div'); cap.className = 'cap'; cap.textContent = label; c.append(cap); }
+  if (!(g.mine || state.admin)) return c;
+  const del = document.createElement('button'); del.className = 'del'; del.textContent = '✕'; del.setAttribute('aria-label', 'Remove GIF');
+  del.onclick = async () => {
+    if (del.dataset.armed) { await api('/api/gifs/' + g.id, { method: 'DELETE' }).catch(e => say(e.message, true)); refresh(); }
+    else { del.dataset.armed = 1; del.textContent = 'Sure?'; del.style.width = 'auto'; del.style.padding = '0 8px'; del.style.borderRadius = '13px';
+      setTimeout(() => { delete del.dataset.armed; del.textContent = '✕'; del.removeAttribute('style'); }, 3000); }
+  };
+  c.append(del);
+  c.addEventListener('dragstart', e => { dragId = g.id; c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
+  c.addEventListener('dragend', () => { dragId = null; c.classList.remove('dragging'); });
+  return c;
+}
+async function move(id, tier) {
+  const g = state.gifs.find(x => x.id === id);
+  if (!g || g.tier === tier) return;
+  g.tier = tier; renderBoard();
+  try { await api('/api/gifs/' + id, { method: 'PATCH', body: JSON.stringify({ tier }) }); }
+  catch (e) { say(e.message, true); refresh(); }
+}
+
+async function refresh() {
+  if (dragId) return;
+  try { state.gifs = (await api('/api/gifs?day=' + state.day)).gifs; renderBoard(); }
+  catch (e) { say('Can’t reach the server. Is it running?', true); }
+}
+
+// --- Admin (you): unlocks deleting anyone's GIF ---
+function renderAdmin() { $('adminBtn').textContent = state.admin ? 'Admin: on (log out)' : 'Admin'; }
+$('adminBtn').onclick = () => {
+  if (state.admin) { adminCode = ''; store('admin', null); state.admin = false; renderAdmin(); renderBoard(); return; }
+  $('adminForm').hidden = !$('adminForm').hidden; if (!$('adminForm').hidden) $('adminCode').focus();
+};
+$('adminForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  adminCode = $('adminCode').value;
+  try { await api('/api/admin'); state.admin = true; store('admin', adminCode); $('adminForm').hidden = true; $('adminCode').value = ''; say('Admin mode on. You can remove any GIF.'); }
+  catch { adminCode = ''; say('Wrong passcode.', true); }
+  renderAdmin(); renderBoard();
+});
+
+// --- Boot ---
+(async () => {
+  renderDay(); renderBoard();
+  if (adminCode) { try { await api('/api/admin'); state.admin = true; } catch { adminCode = ''; store('admin', null); } renderAdmin(); }
+  try {
+    const cfg = await api('/api/config');
+    if (cfg.search) { $('tab-search').hidden = false; $('tab-search').click(); }
+  } catch {}
+  refresh();
+  setInterval(refresh, 10000); // pick up other people's GIFs
+})();
+</script>
+</body>
+</html>

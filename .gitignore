@@ -1,0 +1,5 @@
+config.json
+data.json
+data.json.tmp
+uploads/
+node_modules/
