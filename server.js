@@ -46,8 +46,11 @@ function overLimit(req) {
 }
 // What the browser gets: never the owner hash, just whether it's yours.
 const publicGif = (g, req) => {
-  const { owner, ...rest } = g;
-  return { ...rest, mine: !!owner && owner === ownerHash(req) };
+  const { owner, votes = {}, ...rest } = g;
+  const me = ownerHash(req);
+  const vals = Object.values(votes);
+  return { ...rest, mine: !!owner && owner === me,
+    up: vals.filter(v => v === 1).length, down: vals.filter(v => v === -1).length, myVote: (me && votes[me]) || 0 };
 };
 
 function giphyKey() {
@@ -190,8 +193,10 @@ const server = http.createServer(async (req, res) => {
       // One fav per person per day: picking again swaps your earlier one.
       const existing = owner && db.gifs.find(g => g.owner === owner && g.day === body.day);
       if (existing) {
-        if (existing.src !== src && existing.src.startsWith('/uploads/'))
-          fs.rm(path.join(UPLOAD_DIR, path.basename(existing.src)), () => {});
+        if (existing.src !== src) {
+          if (existing.src.startsWith('/uploads/')) fs.rm(path.join(UPLOAD_DIR, path.basename(existing.src)), () => {});
+          existing.votes = {}; // votes were for the old GIF
+        }
         Object.assign(existing, { src, caption, by, tier: tier || existing.tier, addedAt: new Date().toISOString() });
         save(db);
         return send(res, 200, { gif: publicGif(existing, req), replaced: true });
@@ -199,6 +204,23 @@ const server = http.createServer(async (req, res) => {
       const gif = { id: crypto.randomUUID(), src, tier, day: body.day, caption, by, addedAt: new Date().toISOString(), owner };
       db.gifs.push(gif); save(db);
       return send(res, 201, { gif: publicGif(gif, req) });
+    }
+
+    // Thumbs up (1), thumbs down (-1) or take your vote back (0). One vote per person per GIF.
+    const v = /^\/api\/gifs\/([\w-]+)\/vote$/.exec(p);
+    if (v && req.method === 'POST') {
+      const body = await readBody(req, 1024);
+      const vote = Number(body.vote);
+      if (![1, -1, 0].includes(vote)) return send(res, 400, { error: 'Pick thumbs up or thumbs down.' });
+      const me = ownerHash(req);
+      if (!me) return send(res, 400, { error: 'Your browser blocked voting. Try allowing site data.' });
+      const db = load(); const g = db.gifs.find(x => x.id === v[1]);
+      if (!g) return send(res, 404, { error: 'That GIF is gone.' });
+      if (g.owner === me) return send(res, 400, { error: "You can't vote on your own fav." });
+      g.votes = g.votes || {};
+      if (vote) g.votes[me] = vote; else delete g.votes[me];
+      save(db);
+      return send(res, 200, { gif: publicGif(g, req) });
     }
 
     const m = /^\/api\/gifs\/([\w-]+)$/.exec(p);

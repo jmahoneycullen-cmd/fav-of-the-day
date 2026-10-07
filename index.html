@@ -103,6 +103,11 @@ input[type="text"], input[type="search"], input[type="url"], input[type="passwor
 .fav .when { color: var(--muted); font-size: .75rem; }
 .badge { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; font: 400 .85rem/1 var(--display); color: var(--tier-ink); }
 .you { flex: none; font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.votes { display: flex; gap: 6px; margin-top: 8px; }
+.vote { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; font-size: .9rem; background: var(--bg); }
+.vote .n { font-weight: 800; font-variant-numeric: tabular-nums; min-width: 1ch; }
+.vote[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--surface)); }
+.vote:disabled { opacity: .6; }
 .fav .del { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; padding: 0; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; border: 0; opacity: 0; font-size: 14px; line-height: 1; }
 .fav:hover .del, .fav:focus-within .del { opacity: 1; }
 
@@ -376,7 +381,7 @@ function renderFavs() {
     if (g.caption) { const w = document.createElement('div'); w.className = 'why'; w.textContent = g.caption; who.append(w); }
     const when = document.createElement('div'); when.className = 'when';
     when.textContent = new Date(g.addedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    who.append(when);
+    who.append(when, voteRow(g));
     f.append(img, who);
     addDelete(f, g);
     draggable(f, g);
@@ -413,6 +418,31 @@ function card(g) {
   draggable(c, g);
   return c;
 }
+// Thumbs up / down. Click your current vote again to take it back. No voting on your own fav.
+function voteRow(g) {
+  const row = document.createElement('div'); row.className = 'votes';
+  [[1, '👍', 'up', 'Thumbs up'], [-1, '👎', 'down', 'Thumbs down']].forEach(([val, icon, key, label]) => {
+    const b = document.createElement('button');
+    b.className = 'vote'; b.type = 'button';
+    b.setAttribute('aria-pressed', g.myVote === val);
+    b.setAttribute('aria-label', `${label} (${g[key]})`);
+    b.innerHTML = `<span aria-hidden="true">${icon}</span><span class="n">${g[key]}</span>`;
+    if (g.mine) { b.disabled = true; b.title = "You can't vote on your own fav"; }
+    b.onclick = () => vote(g, g.myVote === val ? 0 : val);
+    row.append(b);
+  });
+  return row;
+}
+async function vote(g, val) {
+  // Update straight away, then confirm with the server.
+  const before = { up: g.up, down: g.down, myVote: g.myVote };
+  if (g.myVote === 1) g.up--; if (g.myVote === -1) g.down--;
+  if (val === 1) g.up++; if (val === -1) g.down++;
+  g.myVote = val; renderFavs();
+  try { Object.assign(g, (await api(`/api/gifs/${g.id}/vote`, { method: 'POST', body: JSON.stringify({ vote: val }) })).gif); renderFavs(); }
+  catch (e) { Object.assign(g, before); renderFavs(); say(e.message, true); }
+}
+
 // Only the person who picked it (or admin) gets a remove button.
 function addDelete(el, g) {
   if (!(g.mine || state.admin)) return;
